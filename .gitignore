@@ -1,0 +1,6 @@
+# Ignore files with no extesnion, expect Makefile
+*
+!*.*
+!*/
+!Makefile
+*.o
