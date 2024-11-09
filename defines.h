@@ -1,0 +1,10 @@
+#ifndef DEFINES_H
+#define DEFINES_H
+
+#define MESSAGE_BUFFER 1024
+#define MAX_MESSAGES_COUNT 100
+#define USERNAME_BUFFER 16
+#define SERVER_IP_BUFFER 16
+#define SERVER_PORT_BUFFER 8
+
+#endif

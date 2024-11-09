@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "messages.h": "c",
+        "__config": "c",
+        "locale": "c",
+        "elements.h": "c"
+    }
+}
