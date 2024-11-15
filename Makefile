@@ -1,4 +1,4 @@
-SRC=main.c elements.c utils.c chatclient.c messages.c
+SRC=main.c elements.c utils.c chatclient.c messages.c debug.c
 EXE=main
 
 .PHONY: build clean server
@@ -10,8 +10,8 @@ run: build
 	./main
 
 server:
-	gcc server.c -o server
+	gcc server.c -g -o server
 	./server
 
 clean:
-	rm $(SRC) $(EXE)
+	rm $(EXE)
