@@ -1,9 +1,10 @@
 {
     "files.associations": {
         "*.embeddedhtml": "html",
-        "messages.h": "c",
-        "__config": "c",
-        "locale": "c",
-        "elements.h": "c"
+        "ctime": "c",
+        "log.h": "c",
+        "debug.h": "c",
+        "stdarg.h": "c",
+        "time.h": "c"
     }
 }

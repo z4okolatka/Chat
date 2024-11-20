@@ -13,18 +13,21 @@ typedef void (*MessageReceivedCallback)(Message msg);
 
 typedef struct
 {
+    char username[USERNAME_BUFFER];
     int server_socket;
     struct sockaddr_in server_address;
     Message messages[MAX_MESSAGES_COUNT];
 } ChatClient;
 
-typedef struct {
-    ChatClient *client;
+typedef struct
+{
+    ChatClient client;
     MessageReceivedCallback receiveMessageCallback;
 } JoinChatData;
 
-ChatClient initChatClient(char server_ip[SERVER_IP_BUFFER], int server_port);
+ChatClient initChatClient(char server_ip[SERVER_IP_BUFFER], int server_port, char username[USERNAME_BUFFER]);
 void sendMessage(ChatClient *client, Message message);
 void connectToChat(ChatClient *client, char username[USERNAME_BUFFER], MessageReceivedCallback receiveMessage);
+void disconnect(ChatClient *client);
 
 #endif

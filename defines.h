@@ -1,5 +1,4 @@
-#ifndef DEFINES_H
-#define DEFINES_H
+#pragma once
 
 #define MESSAGE_BUFFER 1024
 #define MAX_MESSAGES_COUNT 100
@@ -7,4 +6,9 @@
 #define SERVER_IP_BUFFER 16
 #define SERVER_PORT_BUFFER 8
 
-#endif
+#define LOGIN_WIDTH 30
+#define LOGIN_HEIGHT 3
+#define LOGIN_PADDING 13
+#define CHAT_MESSAGE_WIDTH 60
+#define CHAT_MESSAGE_HEIGHT 8
+#define CHAT_MESSAGES_PADDING 4

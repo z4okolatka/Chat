@@ -8,6 +8,9 @@
 #include "elements.h"
 #include "chatclient.h"
 #include "messages.h"
+#include "debug.h"
+
+#define ctrl(x) ((x) & 0x1f)
 
 typedef enum
 {
@@ -15,8 +18,8 @@ typedef enum
     STATE_MAIN
 } State;
 
-char username[USERNAME_BUFFER];
-LoginWindow login_win;
+LoginWindow loginWindow;
+ChatWindow chatWindow;
 ChatClient client;
 State state = STATE_LOGIN;
 
@@ -24,7 +27,7 @@ void initWindows();
 void exitProgram();
 void draw();
 void handleResize(int sig);
-void receiveMessage(Message msg);
+void rcvMsg(Message msg);
 
 int main()
 {
@@ -40,54 +43,67 @@ int main()
     while (state == STATE_LOGIN)
     {
         ch = getch();
-        if (ch == '\n' && login_win.input_num == 2)
+        if (ch == '\n' && loginWindow.input_num == 2)
         {
-            strcpy(username, login_win.username);
             state = STATE_MAIN;
         }
         else
         {
-            handleCh(&login_win, ch);
+            handleChLoginWindow(&loginWindow, ch);
         }
         draw();
     }
-    ChatClient client = initChatClient(login_win.server_ip, atoi(login_win.server_port));
-    connectToChat(&client, username, receiveMessage);
-    echo();
-    char msg[MESSAGE_BUFFER] = "\0";
+    // ///////////////// TEMP /////////////////
+    // state = STATE_MAIN;
+    // strcpy(loginWindow.server_ip, "10.192.211.75");
+    // strcpy(loginWindow.server_port, "5700");
+    // strcpy(loginWindow.username, "z4okolatka");
+    // \\\\\\\\\\\\\\\\\ TEMP \\\\\\\\\\\\\\\\\
+
+    ChatClient client = initChatClient(loginWindow.server_ip, atoi(loginWindow.server_port), loginWindow.username);
+    connectToChat(&client, loginWindow.username, rcvMsg);
+    char msg[MESSAGE_BUFFER];
+    draw();
+
     while (state == STATE_MAIN)
     {
         ch = getch();
-        if (ch == '\n')
-            sendMessage(&client, createMessage(msg, username));
+        if (ch == ctrl('e'))
+        {
+            disconnect(&client);
+            exitProgram();
+        }
+        else if (ch == '\n' || ch == KEY_ENTER)
+        {
+            sendMessage(&client, createMessage(chatWindow.message, chatWindow.username));
+            clearMessageBox(&chatWindow);
+        }
         else
         {
-            msg[strlen(msg) + 1] = '\0';
-            msg[strlen(msg)] = ch;
+            handleChChatWindow(&chatWindow, ch);
         }
+        draw();
     }
 
     exitProgram();
-    return 0;
-}
-
-void receiveMessage(Message msg)
-{
 }
 
 void initWindows()
 {
     int console_height, console_width;
     getmaxyx(stdscr, console_height, console_width);
-    login_win = createLoginWindow(console_width, console_height);
+    loginWindow = createLoginWindow(console_width, console_height);
+    chatWindow = createChatWindow(console_width, console_height);
 }
 
 void draw()
 {
+    clear();
+    refresh();
     if (state == STATE_LOGIN)
-    {
-        drawLoginWindow(&login_win);
-    }
+        drawLoginWindow(&loginWindow);
+    else if (state == STATE_MAIN)
+        drawChatWindow(&chatWindow);
 }
 
 void handleResize(int sig)
@@ -101,18 +117,28 @@ void handleResize(int sig)
 
     if (state == STATE_LOGIN)
     {
-        resizeLoginWindow(&login_win, console_width, console_height);
+        resizeLoginWindow(&loginWindow, console_width, console_height);
     }
     else if (state == STATE_MAIN)
     {
+        resizeChatWindow(&chatWindow, console_width, console_height);
     }
 
     draw();
 }
 
+void rcvMsg(Message msg)
+{
+    receiveMessage(&chatWindow, msg);
+    draw();
+}
+
 void exitProgram()
 {
-    if (login_win.win)
-        delwin(login_win.win);
+    debugLog(VERBOSE, "Exiting program");
+    if (loginWindow.win)
+        delwin(loginWindow.win);
     endwin();
+    // closeDebugLog();
+    exit(0);
 }

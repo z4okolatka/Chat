@@ -10,7 +10,7 @@ run: build
 	./main
 
 server:
-	gcc server.c -g -o server
+	gcc server.c debug.c -o server
 	./server
 
 clean:
