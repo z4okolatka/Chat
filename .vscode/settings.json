@@ -5,6 +5,8 @@
         "log.h": "c",
         "debug.h": "c",
         "stdarg.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "string.h": "c",
+        "messages.h": "c"
     }
 }

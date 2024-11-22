@@ -33,7 +33,7 @@ int main()
 {
     signal(SIGWINCH, handleResize);
     initscr();
-    cbreak();
+    raw();
     noecho();
     keypad(stdscr, TRUE);
     initWindows();
@@ -62,6 +62,7 @@ int main()
 
     ChatClient client = initChatClient(loginWindow.server_ip, atoi(loginWindow.server_port), loginWindow.username);
     connectToChat(&client, loginWindow.username, rcvMsg);
+    strcpy(chatWindow.username, loginWindow.username);
     char msg[MESSAGE_BUFFER];
     draw();
 
@@ -70,12 +71,13 @@ int main()
         ch = getch();
         if (ch == ctrl('e'))
         {
+            sendMessage(&client, createMessage("[Left the chat]", loginWindow.username));
             disconnect(&client);
             exitProgram();
         }
         else if (ch == '\n' || ch == KEY_ENTER)
         {
-            sendMessage(&client, createMessage(chatWindow.message, chatWindow.username));
+            sendMessage(&client, createMessage(chatWindow.message, loginWindow.username));
             clearMessageBox(&chatWindow);
         }
         else

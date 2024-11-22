@@ -1,6 +1,4 @@
-#ifndef MESSAGES_H
-#define MESSAGES_H
-
+#pragma once
 #include "defines.h"
 
 typedef struct
@@ -10,5 +8,3 @@ typedef struct
 } Message;
 
 Message createMessage(char content[MESSAGE_BUFFER], char username[USERNAME_BUFFER]);
-
-#endif

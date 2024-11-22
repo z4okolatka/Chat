@@ -165,20 +165,20 @@ void drawChatWindow(ChatWindow *win)
         int msgLength = strlen(msg.content);
         int msgWidth = w - CHAT_MESSAGES_PADDING;
         int msgHeight = msgLength / msgWidth + 1;
-        if (strcmp(msg.from, win->username) != 0)
+        if (strcmp(msg.from, win->username) == 0) // If it's my message
         {
-            mvwprintw(win->messagesWindow, bottom - msgHeight - 2, 0, msg.from);
+            int usernameLen = strlen(msg.from);
+            mvwprintw(win->messagesWindow, bottom - msgHeight - 2, w - usernameLen, msg.from);
             for (int i = 0; i < msgHeight; i++)
                 for (int j = 0; j < msgWidth; j++)
                     if (i * msgWidth + j >= msgLength)
                         break;
                     else
-                        mvwaddch(win->messagesWindow, bottom - msgHeight - 1 + i, j, msg.content[i * msgWidth + j]);
+                        mvwaddch(win->messagesWindow, bottom - msgHeight - 1 + i, w - min(msgLength, msgWidth) + j, msg.content[i * msgWidth + j]);
         }
         else
         {
-            int usernameLen = strlen(msg.from);
-            mvwprintw(win->messagesWindow, bottom - msgHeight - 2, w - usernameLen, msg.from);
+            mvwprintw(win->messagesWindow, bottom - msgHeight - 2, 0, msg.from);
             for (int i = 0; i < msgHeight; i++)
                 for (int j = 0; j < msgWidth; j++)
                     if (i * msgWidth + j >= msgLength)

@@ -7,7 +7,3 @@ Message createMessage(char content[MESSAGE_BUFFER], char from[USERNAME_BUFFER]) 
     strcpy(message.from, from);
     return message;
 }
-
-void freeMessage(Message *msg)
-{
-}

@@ -34,7 +34,6 @@ void debugLog(DebugLevel level, const char *fmt, ...)
     if (logfile == NULL)
     {
         logfile = fopen("debug.log", "w");
-        setvbuf(logfile, NULL, _IONBF, 0);
     }
 
     va_list args;
@@ -48,6 +47,7 @@ void debugLog(DebugLevel level, const char *fmt, ...)
     fprintf(logfile, "%s %s | ", logtime, levelString(level));
     vfprintf(logfile, fmt, args);
     fprintf(logfile, "\n");
+    fflush(logfile);
     va_end(args);
 }
 

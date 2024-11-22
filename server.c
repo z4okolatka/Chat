@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include "debug.h"
 #include "defines.h"
+#include "messages.h"
+#include <errno.h>
 
 #define MAX_CLIENTS 50
 #define MAX_WAITING_CONNECTIONS 50
@@ -17,20 +19,22 @@
 
 typedef struct
 {
-    int server_socket;
-    struct sockaddr_in server_address;
     char username[USERNAME_BUFFER];
+    pthread_t thread;
+    int socket;
+    struct sockaddr_in address;
 } Client;
 
 Client clients[MAX_CLIENTS];
 int clients_count = 0;
 pthread_mutex_t clients_mutex;
 void *handleClient(void *arg);
-void broadcastMessage(const char *message, int senderSocket);
+void broadcastMessage(Message message);
 void removeClient(int clientSocket);
 void initServer();
 void destroyServer();
 char *getLocalIPAddress();
+void sendMessage(Client *client, Message msg);
 int getPort();
 
 int main()
@@ -76,23 +80,22 @@ int main()
 
         if (pthread_mutex_lock(&clients_mutex) != 0)
         {
-            debug(ERROR, "Couldn't lock mutex");
+            debug(ERROR, "Failed to lock mutex");
             exit(1);
         }
         debug(VERBOSE, "Locked mutex");
         if (clients_count < MAX_CLIENTS)
         {
-            clients[clients_count].server_socket = client_socket;
-            clients[clients_count].server_address = client_address;
-            clients_count++;
+            clients[clients_count].socket = client_socket;
+            clients[clients_count].address = client_address;
 
-            pthread_t thread;
-            if (pthread_create(&thread, NULL, handleClient, (void *)&clients[clients_count - 1]) != 0)
+            if (pthread_create(&clients[clients_count].thread, NULL, handleClient, (void *)&clients[clients_count]) != 0)
             {
                 debug(ERROR, "Couldn't create thread for client");
-                close(client_socket);
+                removeClient(clients[client_socket].socket);
                 exit(1);
             }
+            clients_count++;
             debug(VERBOSE, "Created new thread for client");
         }
         else
@@ -102,7 +105,7 @@ int main()
         }
         if (pthread_mutex_unlock(&clients_mutex) != 0)
         {
-            debug(ERROR, "Couldn't unlock mutex");
+            debug(ERROR, "Failed to unlock mutex");
             exit(1);
         }
         debug(VERBOSE, "Unlocked mutex");
@@ -112,22 +115,72 @@ int main()
     return 0;
 }
 
-void broadcastMessage(const char *message, int senderSocket)
+void sendMessage(Client *client, Message message)
+{
+    // Serizalizing message
+    uint32_t fromLength = strlen(message.from);
+    uint32_t contentLength = strlen(message.content);
+    if (fromLength >= USERNAME_BUFFER)
+        fromLength = USERNAME_BUFFER - 1;
+    if (contentLength >= MESSAGE_BUFFER)
+        contentLength = MESSAGE_BUFFER - 1;
+    size_t totalSize = sizeof(uint32_t) * 2 + fromLength + contentLength;
+    char *buffer = malloc(totalSize);
+    if (buffer == NULL)
+    {
+        debug(ERROR, "Failed to allocate memory for message buffer");
+        exit(1);
+    }
+    uint32_t netFromLength = htonl(fromLength);
+    uint32_t netContentLength = htonl(contentLength);
+    size_t offset = 0;
+    memcpy(buffer + offset, &netFromLength, sizeof(netFromLength));
+    offset += sizeof(netFromLength);
+    memcpy(buffer + offset, &netContentLength, sizeof(netContentLength));
+    offset += sizeof(netContentLength);
+    memcpy(buffer + offset, message.from, fromLength);
+    offset += fromLength;
+    memcpy(buffer + offset, message.content, contentLength);
+    offset += contentLength;
+
+    ssize_t totalSent = 0;
+    ssize_t n;
+    while (totalSent < totalSize)
+    {
+        n = send(client->socket, buffer + totalSent, totalSize - totalSent, 0);
+        if (n <= 0)
+        {
+            if (n < 0)
+                debug(ERROR, "Failed to broadcast (sent %zu of %zu bytes)", totalSent, totalSize);
+            else
+                debug(ERROR, "Client disconnected while sending message");
+            free(buffer);
+            close(client->socket);
+            removeClient(client->socket);
+            return;
+        }
+        totalSent += n;
+        debug(VERBOSE, "Sent %d of %d", totalSent, totalSize);
+    }
+    debug(INFO, "Broadcasted to \"%s\"", client->username);
+    free(buffer);
+}
+
+void broadcastMessage(Message message)
 {
     if (pthread_mutex_lock(&clients_mutex) != 0)
     {
-        debug(ERROR, "Couldn't lock mutex");
+        debug(ERROR, "Failed to lock mutex");
         exit(1);
     }
     debug(VERBOSE, "Locked mutex");
 
     for (int i = 0; i < clients_count; i++)
-        // if (clients[i].server_socket != senderSocket)
-        send(clients[i].server_socket, message, strlen(message), 0);
+        sendMessage(&clients[i], message);
 
     if (pthread_mutex_unlock(&clients_mutex) != 0)
     {
-        debug(ERROR, "Couldn't unlock mutex");
+        debug(ERROR, "Failed to unlock mutex");
         exit(1);
     }
     debug(VERBOSE, "Unlocked mutex");
@@ -137,21 +190,35 @@ void removeClient(int clientSocket)
 {
     if (pthread_mutex_lock(&clients_mutex) != 0)
     {
-        debug(ERROR, "Couldn't lock mutex");
+        debug(ERROR, "Failed to lock mutex");
         exit(1);
     }
     debug(VERBOSE, "Locked mutex");
+    Client *client = NULL;
+    size_t index = -1;
     for (int i = 0; i < clients_count; i++)
-        if (clients[i].server_socket == clientSocket)
+        if (clients[i].socket == clientSocket)
         {
-            for (int j = i; j < clients_count; j++)
-                clients[j] = clients[j + 1];
-            clients_count--;
+            index = i;
             break;
         }
+    if (index == -1)
+        return;
+    client = &clients[index];
+    close(client->socket);
+    if (pthread_cancel(client->thread) != 0)
+    {
+        debug(ERROR, "Failed to cancel client's thread");
+        exit(1);
+    }
+    debug(VERBOSE, "Canceled client's thread");
+
+    for (int j = index; j < clients_count; j++)
+        clients[j] = clients[j + 1];
+    clients_count--;
     if (pthread_mutex_unlock(&clients_mutex) != 0)
     {
-        debug(ERROR, "Couldn't unlock mutex\n");
+        debug(ERROR, "Failed to unlock mutex");
         exit(1);
     }
     debug(VERBOSE, "Unlocked mutex");
@@ -169,6 +236,10 @@ void initServer()
 
 void destroyServer()
 {
+    for (int i = 0; i < clients_count; i++)
+    {
+        removeClient(clients[i].socket);
+    }
     if (pthread_mutex_destroy(&clients_mutex) != 0)
     {
         debug(ERROR, "Coludn't destroy mutex");
@@ -180,29 +251,76 @@ void destroyServer()
 void *handleClient(void *arg)
 {
     Client *client = ((Client *)arg);
-    char buffer[BUFFER_SIZE];
-    int bytesReceived = recv(client->server_socket, buffer, sizeof(buffer) - 1, 0);
-    strcpy(client->username, buffer);
-    debug(INFO, "Client's username: \"%s\"", client->username, bytesReceived);
 
-    debug(VERBOSE, "Listening to messages from \"%s\"", client->username);
-    while ((bytesReceived = recv(client->server_socket, buffer, sizeof(buffer) - 1, 0)) > 0)
+    while (1)
     {
-        buffer[bytesReceived] = '\0';
-        debug(INFO, "Client's (\"%s\") message: \"%s\" of size %d", client->username, buffer, bytesReceived);
+        uint32_t netFromLength = 0;
+        uint32_t netContentLength = 0;
+        ssize_t n;
+        n = recv(client->socket, &netFromLength, sizeof(netFromLength), MSG_WAITALL);
+        if (n <= 0)
+        {
+            if (n == 0)
+                debug(ERROR, "Client disconnected while receiving 'fromLength'");
+            else
+                debug(ERROR, "Error receiving 'fromLength': %s (%d)", strerror(errno), errno);
+            break;
+        }
+        debug(VERBOSE, "Received 'netFromLength'");
+        n = recv(client->socket, &netContentLength, sizeof(netContentLength), MSG_WAITALL);
+        if (n <= 0)
+        {
+            if (n == 0)
+                debug(ERROR, "Client disconnected while receiving 'contentLength'");
+            else
+                debug(ERROR, "Error receiving 'contentLength': %s (%d)", strerror(errno), errno);
+            removeClient(client->socket);
+            break;
+        }
+        debug(VERBOSE, "Received 'netContentLength'");
+        uint32_t fromLength = ntohl(netFromLength);
+        uint32_t contentLength = ntohl(netContentLength);
+        if (fromLength >= USERNAME_BUFFER || contentLength >= MESSAGE_BUFFER)
+        {
+            debug(ERROR, "Received invalid lengths: from_length=%u, content_length=%u", fromLength, contentLength);
+            break;
+        }
+        char from[USERNAME_BUFFER];
+        char content[MESSAGE_BUFFER];
+        n = recv(client->socket, from, fromLength, MSG_WAITALL);
+        if (n <= 0)
+        {
+            if (n == 0)
+                debug(ERROR, "Client disconnected while receiving 'from'");
+            else
+                debug(ERROR, "Error receiving 'from': %s (%d)", strerror(errno), errno);
+            break;
+        }
+        debug(VERBOSE, "Received 'from'");
+        from[fromLength] = '\0';
+        n = recv(client->socket, content, contentLength, MSG_WAITALL);
+        if (n <= 0)
+        {
+            if (n == 0)
+                debug(ERROR, "Client disconnected while receiving 'content'");
+            else
+                debug(ERROR, "Error receiving 'content': %s (%d)", strerror(errno), errno);
+            break;
+        }
+        debug(VERBOSE, "Received 'content'");
+        content[contentLength] = '\0';
 
-        debug(VERBOSE, "Broadcasting message to everyone");
-        broadcastMessage(buffer, client->server_socket);
-        memset(buffer, 0, BUFFER_SIZE);
+        // Deserializing message
+        Message msg;
+        strcpy(msg.from, from);
+        strcpy(msg.content, content);
+        if (strcmp(msg.content, "[Joined the chat]") == 0)
+            strcpy(client->username, msg.from);
+        debug(INFO, "\"%s\": %s", from, content);
+        broadcastMessage(msg);
     }
 
-    if (bytesReceived == 0)
-        debug(WARNING, "Client disconnected");
-    else if (bytesReceived == -1)
-        debug(WARNING, "Client recv failed");
-
-    removeClient(client->server_socket);
-    close(client->server_socket);
+    removeClient(client->socket);
 
     return NULL;
 }
@@ -236,5 +354,5 @@ char *getLocalIPAddress()
 int getPort()
 {
     srand(time(NULL));
-    return rand() % 10000;
+    return (rand() % 9000) + 1000;
 }
